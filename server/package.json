@@ -1,0 +1,17 @@
+{
+  "name": "@atlas/cc-swarm",
+  "version": "0.1.0",
+  "description": "Multi-machine Claude Code orchestration via MCP",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "better-sqlite3": "^11.0.0",
+    "ws": "^8.16.0",
+    "uuid": "^9.0.0"
+  }
+}

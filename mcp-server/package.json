@@ -1,0 +1,16 @@
+{
+  "name": "@atlas/cc-swarm-mcp",
+  "version": "0.1.0",
+  "description": "MCP server wrapper for CC Swarm — gives Claude Code native swarm tools",
+  "main": "index.js",
+  "type": "module",
+  "bin": {
+    "cc-swarm-mcp": "./index.js"
+  },
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}
