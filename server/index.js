@@ -172,10 +172,24 @@ app.get('/api/nodes/:id', (req, res) => {
 
 // ── API: Task Queue ─────────────────────────────────────────
 
-// Create task
+// Import smart router
+import { routeTask, explainRouting } from './router.js';
+
+// Create task (with auto-routing if assigned_to is omitted)
 app.post('/api/tasks', (req, res) => {
-  const { title, description, assigned_to, created_by, priority, metadata } = req.body;
+  let { title, description, assigned_to, created_by, priority, metadata } = req.body;
   const id = uuidv4().slice(0, 12);
+
+  // AUTO-ROUTE: if no assigned_to, find the best node
+  let routing_reason = null;
+  if (!assigned_to) {
+    const nodes = db.prepare('SELECT * FROM nodes').all();
+    assigned_to = routeTask(title, description || '', nodes);
+    if (assigned_to) {
+      routing_reason = explainRouting(title, description || '', nodes);
+      console.log(`[ROUTE] Auto-routed "${title}" → ${assigned_to}: ${routing_reason}`);
+    }
+  }
 
   db.prepare(`
     INSERT INTO tasks (id, title, description, assigned_to, created_by, priority, metadata)

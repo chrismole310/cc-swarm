@@ -88,16 +88,16 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
     },
     {
       name: 'swarm_assign_task',
-      description: 'Create and assign a task to a specific CC node. The target node will be notified.',
+      description: 'Create and assign a task to a specific CC node. If assigned_to is omitted, the swarm will AUTO-ROUTE to the best machine based on capabilities (e.g., render tasks → Mac Studio GPU, social posting → posting machine, backend work → engine). The target node will be notified.',
       inputSchema: {
         type: 'object',
         properties: {
           title: { type: 'string', description: 'Task title' },
           description: { type: 'string', description: 'Detailed task description' },
-          assigned_to: { type: 'string', description: 'Node ID to assign to (e.g., cc1, cc2, cc3)' },
+          assigned_to: { type: 'string', description: 'Node ID to assign to (e.g., cc1, cc2, cc3). OMIT to auto-route based on task content.' },
           priority: { type: 'number', description: 'Priority 1-10 (10=highest)', default: 5 },
         },
-        required: ['title', 'assigned_to'],
+        required: ['title'],
       },
     },
     {
