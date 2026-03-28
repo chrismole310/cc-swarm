@@ -417,72 +417,385 @@ app.get('/api/status', (req, res) => {
   });
 });
 
-// Simple dashboard HTML
+// Visual Network Dashboard with animated node connections
 app.get('/', (req, res) => {
   res.send(`
 <!DOCTYPE html>
 <html>
 <head>
-  <title>CC Swarm Hub</title>
+  <title>⚡ CC Swarm</title>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, system-ui, sans-serif; background: #0a0a0a; color: #e0e0e0; padding: 20px; }
-    h1 { color: #00ff88; margin-bottom: 20px; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 20px; }
-    .card { background: #1a1a1a; border: 1px solid #333; border-radius: 12px; padding: 20px; }
-    .card h2 { color: #00ff88; font-size: 14px; text-transform: uppercase; margin-bottom: 15px; }
-    .stat { font-size: 36px; font-weight: bold; color: white; }
-    .node { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #222; }
-    .dot { width: 10px; height: 10px; border-radius: 50%; }
-    .dot.online { background: #00ff88; }
-    .dot.offline { background: #ff4444; }
-    .role { color: #888; font-size: 12px; }
-    .task { padding: 8px 0; border-bottom: 1px solid #222; }
-    .task .title { color: #fff; }
-    .task .status { font-size: 12px; padding: 2px 8px; border-radius: 4px; }
-    .status.pending { background: #444; color: #aaa; }
-    .status.in_progress { background: #1a3a1a; color: #00ff88; }
-    .status.completed { background: #1a1a3a; color: #4488ff; }
-    #log { background: #111; border: 1px solid #333; border-radius: 8px; padding: 15px; font-family: monospace; font-size: 12px; max-height: 300px; overflow-y: auto; }
-    .log-entry { padding: 2px 0; color: #888; }
-    .log-entry .time { color: #555; }
-    .log-entry .event { color: #00ff88; }
+    body { font-family: -apple-system, system-ui, sans-serif; background: #050510; color: #e0e0e0; overflow: hidden; height: 100vh; }
+
+    /* Network visualization canvas */
+    #network { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+
+    /* Header overlay */
+    .header { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); text-align: center; z-index: 10; }
+    .header h1 { font-size: 28px; color: #00ff88; letter-spacing: 3px; text-shadow: 0 0 30px rgba(0,255,136,0.3); }
+    .header .subtitle { font-size: 12px; color: #555; margin-top: 5px; letter-spacing: 2px; }
+
+    /* Stats bar */
+    .stats-bar { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 30px; z-index: 10; background: rgba(10,10,20,0.8); padding: 12px 30px; border-radius: 30px; border: 1px solid #222; backdrop-filter: blur(10px); }
+    .stat-item { text-align: center; }
+    .stat-item .value { font-size: 24px; font-weight: bold; color: #00ff88; }
+    .stat-item .label { font-size: 10px; color: #666; text-transform: uppercase; letter-spacing: 1px; }
+
+    /* Live feed */
+    .feed { position: fixed; right: 20px; top: 80px; width: 300px; max-height: calc(100vh - 140px); overflow-y: auto; z-index: 10; background: rgba(10,10,20,0.7); border-radius: 12px; border: 1px solid #1a1a2a; padding: 15px; backdrop-filter: blur(10px); }
+    .feed h3 { font-size: 11px; color: #00ff88; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 10px; }
+    .feed-item { font-size: 11px; padding: 4px 0; color: #666; border-bottom: 1px solid #111; }
+    .feed-item .event { color: #00ff88; }
+    .feed-item .time { color: #333; }
+
+    /* Task list */
+    .tasks { position: fixed; left: 20px; top: 80px; width: 280px; z-index: 10; background: rgba(10,10,20,0.7); border-radius: 12px; border: 1px solid #1a1a2a; padding: 15px; backdrop-filter: blur(10px); }
+    .tasks h3 { font-size: 11px; color: #00ff88; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 10px; }
+    .task-item { font-size: 11px; padding: 6px 0; border-bottom: 1px solid #111; }
+    .task-item .title { color: #ccc; }
+    .task-item .assigned { color: #00ff88; font-size: 10px; }
   </style>
 </head>
 <body>
-  <h1>⚡ CC Swarm Hub</h1>
-  <div class="grid">
-    <div class="card"><h2>Nodes</h2><div id="nodes">Loading...</div></div>
-    <div class="card"><h2>Tasks</h2><div id="tasks">Loading...</div></div>
-    <div class="card"><h2>Stats</h2><div id="stats">Loading...</div></div>
+  <div class="header">
+    <h1>⚡ CC SWARM</h1>
+    <div class="subtitle" id="mode">INITIALIZING...</div>
   </div>
-  <div class="card"><h2>Live Feed</h2><div id="log"></div></div>
+
+  <canvas id="network"></canvas>
+
+  <div class="tasks">
+    <h3>Task Queue</h3>
+    <div id="task-list"></div>
+  </div>
+
+  <div class="feed">
+    <h3>Live Feed</h3>
+    <div id="feed"></div>
+  </div>
+
+  <div class="stats-bar">
+    <div class="stat-item"><div class="value" id="nodes-count">-</div><div class="label">Nodes</div></div>
+    <div class="stat-item"><div class="value" id="tasks-count">-</div><div class="label">Tasks</div></div>
+    <div class="stat-item"><div class="value" id="msgs-count">-</div><div class="label">Messages</div></div>
+    <div class="stat-item"><div class="value" id="files-count">-</div><div class="label">Files</div></div>
+    <div class="stat-item"><div class="value" id="uptime">-</div><div class="label">Uptime</div></div>
+  </div>
+
   <script>
-    async function refresh() {
-      const res = await fetch('/api/status');
-      const data = await res.json();
-      document.getElementById('nodes').innerHTML = data.nodes.map(n =>
-        '<div class="node"><span class="dot ' + n.status + '"></span><strong>' + n.name + '</strong><span class="role">' + n.role + '</span></div>'
-      ).join('') || '<div style="color:#666">No nodes registered</div>';
-      document.getElementById('stats').innerHTML =
-        '<div>Pending: <span class="stat">' + data.tasks.pending + '</span></div>' +
-        '<div>Active: <span class="stat">' + data.tasks.active + '</span></div>' +
-        '<div>Complete: <span class="stat">' + data.tasks.completed + '</span></div>' +
-        '<div style="margin-top:10px">Messages: ' + data.messages + ' | Files: ' + data.files + '</div>';
-      const tasksRes = await fetch('/api/tasks?status=pending&status=in_progress');
-      const tasksData = await tasksRes.json();
-      document.getElementById('tasks').innerHTML = tasksData.slice(0, 10).map(t =>
-        '<div class="task"><span class="title">' + t.title + '</span> <span class="status ' + t.status + '">' + t.status + '</span></div>'
-      ).join('') || '<div style="color:#666">No active tasks</div>';
+    const canvas = document.getElementById('network');
+    const ctx = canvas.getContext('2d');
+    let nodes = [];
+    let pulses = [];
+    let particles = [];
+    let frame = 0;
+
+    // Machine icons (emoji representations)
+    const ICONS = {
+      'render-farm': '🖥️',
+      'engine': '⚙️',
+      'posting': '📱',
+      'general': '💻',
+    };
+
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
     }
-    refresh(); setInterval(refresh, 5000);
+    resize();
+    window.addEventListener('resize', resize);
+
+    // Position nodes in a circle
+    function layoutNodes(nodeData) {
+      const cx = canvas.width / 2;
+      const cy = canvas.height / 2;
+      const radius = Math.min(canvas.width, canvas.height) * 0.25;
+
+      nodes = nodeData.map((n, i) => {
+        const angle = (i / nodeData.length) * Math.PI * 2 - Math.PI / 2;
+        return {
+          ...n,
+          x: cx + Math.cos(angle) * radius,
+          y: cy + Math.sin(angle) * radius,
+          targetX: cx + Math.cos(angle) * radius,
+          targetY: cy + Math.sin(angle) * radius,
+          radius: 40,
+          pulseRadius: 40,
+          icon: ICONS[n.role] || '💻',
+          glowIntensity: n.status === 'online' ? 1 : 0.2,
+        };
+      });
+    }
+
+    // Create a pulse between two nodes
+    function createPulse(fromIdx, toIdx) {
+      if (fromIdx >= nodes.length || toIdx >= nodes.length) return;
+      pulses.push({
+        from: fromIdx,
+        to: toIdx,
+        progress: 0,
+        speed: 0.008 + Math.random() * 0.005,
+        color: \`hsl(\${120 + Math.random() * 40}, 100%, 60%)\`,
+        size: 3 + Math.random() * 3,
+      });
+    }
+
+    // Create ambient particles
+    function createParticle() {
+      particles.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        vx: (Math.random() - 0.5) * 0.3,
+        vy: (Math.random() - 0.5) * 0.3,
+        life: 1,
+        decay: 0.002 + Math.random() * 0.003,
+        size: Math.random() * 2,
+      });
+    }
+
+    function draw() {
+      frame++;
+      ctx.fillStyle = 'rgba(5, 5, 16, 0.15)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Draw grid (subtle)
+      ctx.strokeStyle = 'rgba(0, 255, 136, 0.03)';
+      ctx.lineWidth = 1;
+      for (let x = 0; x < canvas.width; x += 60) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
+        ctx.stroke();
+      }
+      for (let y = 0; y < canvas.height; y += 60) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+      }
+
+      // Draw connections between ALL nodes
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const a = nodes[i];
+          const b = nodes[j];
+          const bothOnline = a.status === 'online' && b.status === 'online';
+
+          // Connection line
+          const gradient = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
+          const alpha = bothOnline ? 0.15 + Math.sin(frame * 0.02 + i) * 0.05 : 0.05;
+          gradient.addColorStop(0, \`rgba(0, 255, 136, \${alpha})\`);
+          gradient.addColorStop(0.5, \`rgba(0, 200, 255, \${alpha * 0.7})\`);
+          gradient.addColorStop(1, \`rgba(0, 255, 136, \${alpha})\`);
+
+          ctx.strokeStyle = gradient;
+          ctx.lineWidth = bothOnline ? 2 : 1;
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.stroke();
+
+          // Animated dashes on active connections
+          if (bothOnline) {
+            ctx.strokeStyle = \`rgba(0, 255, 136, \${0.3 + Math.sin(frame * 0.05) * 0.1})\`;
+            ctx.setLineDash([5, 15]);
+            ctx.lineDashOffset = -frame * 0.5;
+            ctx.beginPath();
+            ctx.moveTo(a.x, a.y);
+            ctx.lineTo(b.x, b.y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+          }
+        }
+      }
+
+      // Draw pulses (data flowing between nodes)
+      pulses = pulses.filter(p => {
+        p.progress += p.speed;
+        if (p.progress >= 1) return false;
+
+        const a = nodes[p.from];
+        const b = nodes[p.to];
+        const x = a.x + (b.x - a.x) * p.progress;
+        const y = a.y + (b.y - a.y) * p.progress;
+
+        // Glow
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = 15;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(x, y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Trail
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = \`rgba(0, 255, 136, 0.3)\`;
+        for (let t = 0; t < 5; t++) {
+          const tp = p.progress - t * 0.02;
+          if (tp < 0) break;
+          const tx = a.x + (b.x - a.x) * tp;
+          const ty = a.y + (b.y - a.y) * tp;
+          ctx.beginPath();
+          ctx.arc(tx, ty, p.size * (1 - t * 0.15), 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        return true;
+      });
+
+      // Draw particles
+      if (Math.random() < 0.3) createParticle();
+      particles = particles.filter(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= p.decay;
+        if (p.life <= 0) return false;
+
+        ctx.fillStyle = \`rgba(0, 255, 136, \${p.life * 0.2})\`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+        return true;
+      });
+
+      // Draw nodes
+      for (const node of nodes) {
+        const isOnline = node.status === 'online';
+        const pulse = Math.sin(frame * 0.05) * 5;
+
+        // Outer glow ring
+        if (isOnline) {
+          ctx.shadowColor = '#00ff88';
+          ctx.shadowBlur = 20 + pulse;
+          ctx.strokeStyle = \`rgba(0, 255, 136, \${0.2 + Math.sin(frame * 0.03) * 0.1})\`;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, node.radius + 10 + pulse, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        // Node circle
+        ctx.shadowBlur = isOnline ? 15 : 0;
+        ctx.shadowColor = isOnline ? '#00ff88' : 'transparent';
+        const grad = ctx.createRadialGradient(node.x, node.y, 0, node.x, node.y, node.radius);
+        grad.addColorStop(0, isOnline ? '#0a2a1a' : '#1a1a1a');
+        grad.addColorStop(1, isOnline ? '#051510' : '#0a0a0a');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Border
+        ctx.strokeStyle = isOnline ? '#00ff88' : '#333';
+        ctx.lineWidth = isOnline ? 2 : 1;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        // Icon
+        ctx.font = '24px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(node.icon, node.x, node.y - 2);
+
+        // Name
+        ctx.font = 'bold 11px -apple-system, sans-serif';
+        ctx.fillStyle = isOnline ? '#00ff88' : '#555';
+        ctx.fillText(node.name.replace('CC', '').replace(' — ', ''), node.x, node.y + node.radius + 18);
+
+        // Role
+        ctx.font = '9px -apple-system, sans-serif';
+        ctx.fillStyle = '#666';
+        ctx.fillText(node.role, node.x, node.y + node.radius + 32);
+
+        // Status dot
+        ctx.fillStyle = isOnline ? '#00ff88' : '#ff4444';
+        ctx.shadowColor = isOnline ? '#00ff88' : '#ff4444';
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.arc(node.x + node.radius - 5, node.y - node.radius + 5, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+
+      // Hub center indicator
+      const cx = canvas.width / 2;
+      const cy = canvas.height / 2;
+      ctx.font = '14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = \`rgba(0, 255, 136, \${0.3 + Math.sin(frame * 0.02) * 0.1})\`;
+      ctx.fillText('⚡', cx, cy);
+      ctx.font = '8px -apple-system, sans-serif';
+      ctx.fillStyle = '#333';
+      ctx.fillText('HUB', cx, cy + 14);
+
+      // Random pulses between nodes
+      if (frame % 60 === 0 && nodes.length > 1) {
+        const from = Math.floor(Math.random() * nodes.length);
+        let to = Math.floor(Math.random() * nodes.length);
+        while (to === from) to = Math.floor(Math.random() * nodes.length);
+        if (nodes[from].status === 'online' && nodes[to].status === 'online') {
+          createPulse(from, to);
+        }
+      }
+
+      requestAnimationFrame(draw);
+    }
+
+    // Fetch data and update
+    async function refresh() {
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+
+        layoutNodes(data.nodes);
+
+        const online = data.swarm.nodes_online;
+        const total = data.swarm.nodes_total;
+        document.getElementById('nodes-count').textContent = online + '/' + total;
+        document.getElementById('tasks-count').textContent = data.tasks.pending + data.tasks.active;
+        document.getElementById('msgs-count').textContent = data.messages;
+        document.getElementById('files-count').textContent = data.files;
+        document.getElementById('uptime').textContent = Math.floor(data.swarm.uptime / 60) + 'm';
+
+        document.getElementById('mode').textContent =
+          online === total && total > 1 ? '⚡ BEAST MODE — ' + total + ' NODES CONNECTED' :
+          online > 0 ? online + ' / ' + total + ' NODES ONLINE' : 'OFFLINE';
+
+        // Tasks
+        const tasksRes = await fetch('/api/tasks');
+        const tasks = await tasksRes.json();
+        document.getElementById('task-list').innerHTML = tasks.slice(0, 8).map(t =>
+          '<div class="task-item"><div class="title">' + t.title + '</div><div class="assigned">→ ' + (t.assigned_to || 'unassigned') + ' · ' + t.status + '</div></div>'
+        ).join('') || '<div style="color:#333;font-size:11px">No tasks</div>';
+
+      } catch(e) {
+        document.getElementById('mode').textContent = 'HUB UNREACHABLE';
+      }
+    }
+
+    refresh();
+    setInterval(refresh, 5000);
+    draw();
+
+    // WebSocket for live events
     const ws = new WebSocket('ws://' + location.host + '?node_id=dashboard');
     ws.onmessage = (e) => {
       const data = JSON.parse(e.data);
-      const log = document.getElementById('log');
+      const feed = document.getElementById('feed');
       const time = new Date().toLocaleTimeString();
-      log.innerHTML = '<div class="log-entry"><span class="time">' + time + '</span> <span class="event">' + data.event + '</span> ' + JSON.stringify(data.data).substring(0, 100) + '</div>' + log.innerHTML;
+      feed.innerHTML = '<div class="feed-item"><span class="time">' + time + '</span> <span class="event">' + data.event + '</span> ' + JSON.stringify(data.data).substring(0, 60) + '</div>' + feed.innerHTML;
+
+      // Create visual pulse on events
+      if (nodes.length > 1) {
+        const from = Math.floor(Math.random() * nodes.length);
+        let to = Math.floor(Math.random() * nodes.length);
+        while (to === from) to = Math.floor(Math.random() * nodes.length);
+        createPulse(from, to);
+        createPulse(to, from);
+      }
     };
   </script>
 </body>
