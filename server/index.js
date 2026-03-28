@@ -493,11 +493,17 @@ app.get('/', (req, res) => {
     let particles = [];
     let frame = 0;
 
-    // Machine icons (emoji representations)
-    const ICONS = {
-      'render-farm': '🖥️',
-      'engine': '⚙️',
-      'posting': '📱',
+    // Machine icons — exact computer types
+    const ICONS_BY_ID = {
+      'cc1': '🖥',      // Mac Mini
+      'cc2': '🗄️',      // Mac Studio (tower)
+      'cc3': '🖥',      // Mac Mini
+      'cc4': '💻',      // MacBook Air (laptop)
+    };
+    const ICONS_FALLBACK = {
+      'render-farm': '🗄️',
+      'engine': '🖥',
+      'posting': '🖥',
       'general': '💻',
     };
 
@@ -524,7 +530,7 @@ app.get('/', (req, res) => {
           targetY: cy + Math.sin(angle) * radius,
           radius: 40,
           pulseRadius: 40,
-          icon: ICONS[n.role] || '💻',
+          icon: ICONS_BY_ID[n.id] || ICONS_FALLBACK[n.role] || '💻',
           glowIntensity: n.status === 'online' ? 1 : 0.2,
         };
       });
@@ -694,11 +700,68 @@ app.get('/', (req, res) => {
         ctx.stroke();
         ctx.shadowBlur = 0;
 
-        // Icon
-        ctx.font = '24px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(node.icon, node.x, node.y - 2);
+        // Draw machine shape based on type
+        ctx.save();
+        ctx.translate(node.x, node.y);
+        const color = isOnline ? '#00ff88' : '#444';
+
+        if (node.id === 'cc2') {
+          // Mac Studio — tall rectangle (tower)
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(-12, -16, 24, 32);
+          ctx.fillStyle = isOnline ? 'rgba(0,255,136,0.1)' : 'rgba(50,50,50,0.3)';
+          ctx.fillRect(-12, -16, 24, 32);
+          // Vent lines
+          for (let v = -10; v <= 10; v += 5) {
+            ctx.strokeStyle = \`rgba(0,255,136,\${isOnline ? 0.3 : 0.1})\`;
+            ctx.beginPath(); ctx.moveTo(-8, v); ctx.lineTo(8, v); ctx.stroke();
+          }
+          ctx.fillStyle = color; ctx.font = '7px sans-serif'; ctx.textAlign = 'center';
+          ctx.fillText('STUDIO', 0, 25);
+        } else if (node.id === 'cc1' || node.id === 'cc3') {
+          // Mac Mini — flat wide rectangle
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 1.5;
+          const r = 4;
+          ctx.beginPath();
+          ctx.roundRect(-18, -8, 36, 16, r);
+          ctx.stroke();
+          ctx.fillStyle = isOnline ? 'rgba(0,255,136,0.1)' : 'rgba(50,50,50,0.3)';
+          ctx.fill();
+          // Apple dot
+          ctx.fillStyle = color;
+          ctx.beginPath(); ctx.arc(0, 0, 2, 0, Math.PI * 2); ctx.fill();
+          ctx.font = '7px sans-serif'; ctx.textAlign = 'center';
+          ctx.fillText('MINI', 0, 20);
+        } else if (node.id === 'cc4') {
+          // MacBook Air — laptop shape
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 1.5;
+          // Screen
+          ctx.beginPath();
+          ctx.roundRect(-16, -14, 32, 22, 2);
+          ctx.stroke();
+          ctx.fillStyle = isOnline ? 'rgba(0,255,136,0.08)' : 'rgba(50,50,50,0.3)';
+          ctx.fill();
+          // Base/keyboard
+          ctx.beginPath();
+          ctx.moveTo(-20, 8); ctx.lineTo(20, 8);
+          ctx.lineTo(18, 12); ctx.lineTo(-18, 12);
+          ctx.closePath();
+          ctx.stroke();
+          ctx.fillStyle = isOnline ? 'rgba(0,255,136,0.05)' : 'rgba(30,30,30,0.3)';
+          ctx.fill();
+          ctx.fillStyle = color; ctx.font = '7px sans-serif'; ctx.textAlign = 'center';
+          ctx.fillText('AIR', 0, 24);
+        } else {
+          // Generic — just emoji
+          ctx.font = '24px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(node.icon, 0, -2);
+        }
+        ctx.restore();
 
         // Name
         ctx.font = 'bold 11px -apple-system, sans-serif';
